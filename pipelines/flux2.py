@@ -8,6 +8,7 @@ from diffusers.pipelines.flux2.pipeline_output import Flux2PipelineOutput
 MODEL_IDS = {
     'flux2-dev': "black-forest-labs/FLUX.2-dev",
     'flux2-klein': "black-forest-labs/FLUX.2-klein-base-9B",
+    'flux2-klein-4b': "black-forest-labs/FLUX.2-klein-base-4B",
 }
 
 
@@ -164,7 +165,7 @@ class Flux2Editor:
     negative_prompt = ""
 
     def __init__(self, model, cache_dir, device):
-        self.is_klein = model == 'flux2-klein'
+        self.is_klein = model.startswith('flux2-klein')
         pipeline_cls = Flux2KleinPipeline if self.is_klein else Flux2Pipeline
         self.pipe = pipeline_cls.from_pretrained(MODEL_IDS[model], torch_dtype=torch.bfloat16, cache_dir=cache_dir)
         self.pipe.generate = generate.__get__(self.pipe)
