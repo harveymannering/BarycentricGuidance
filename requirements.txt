@@ -1,0 +1,11 @@
+torch
+diffusers  # needs FLUX.2 klein + QwenImageEditPlus support (developed with 0.39.0.dev0)
+transformers
+accelerate
+numpy
+pandas
+scipy
+opencv-python
+face-alignment
+pillow
+tqdm
