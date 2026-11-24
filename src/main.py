@@ -1,7 +1,7 @@
 r"""Barycentric Guidance: valence-arousal editing with foundation image editors.
 
 Example (10x10 VA grids on AffectNet with FLUX.2 [dev], barycentric guidance + face morph):
-    python main.py --model flux2-dev --mode bary_guide --morph --scale_w_cfg --smoothness2d \
+    python src/main.py --model flux2-dev --mode bary_guide --morph --scale_w_cfg --smoothness2d \
         --img_dir /path/to/affectnet/Manually_Annotated_Images --affectnet_csv /path/to/affectnet/validation.csv \
         --output_dir /path/to/outputs --cache_dir /path/to/hf_cache
 
@@ -28,7 +28,7 @@ def parse_args():
     parser.add_argument("--affectnet_csv", default=None, help="AffectNet annotation CSV. If given, --img_dir is treated as AffectNet and filtered by it.")
     parser.add_argument("--output_dir", required=True, help="Directory where generated images are saved.")
     parser.add_argument("--cache_dir", required=True, help="Directory where the diffusion model is saved.")
-    parser.add_argument("--mesh_csv", default=DEFAULT_MESH_CSV, help="CSV with columns Emotion,Pleasure_Mean,Arousal_Mean defining the VA mesh anchors (default: va_mesh.csv).")
+    parser.add_argument("--mesh_csv", default=DEFAULT_MESH_CSV, help="CSV with columns Emotion,Pleasure_Mean,Arousal_Mean defining the VA mesh anchors (default: src/va_mesh.csv).")
     # Experiments
     parser.add_argument('--fid', action='store_true', help="Generate images at random VA targets (FID measurement).")
     parser.add_argument('--smoothness2d', action='store_true', help="Generate a 10x10 VA grid per source image (smoothness2d measurement).")
