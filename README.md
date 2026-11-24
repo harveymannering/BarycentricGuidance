@@ -4,23 +4,7 @@
 
 Code for *Barycentric Guidance: Turning Foundation Image Editors into Continuous Affective Controllers* (NeurIPS 2026).
 
-Barycentric guidance maps a target valence–arousal (VA) point to weights over the three discrete emotion anchors of the enclosing triangle in a VA mesh. It then combines the editor's noise predictions for those emotion prompts with those weights. Optionally, a landmark-based 3-way face morph of the anchor edits guides the first few denoising steps.
-
-Supported editors: **FLUX.2 [dev]**, **FLUX.2 [klein] 9B / 4B** and **Qwen-Image-Edit-2511**.
-
-## Layout
-
-| File | Contents |
-| --- | --- |
-| `src/main.py` | CLI and experiments (`--fid`, `--smoothness2d`) |
-| `src/guidance.py` | `edit_va`: barycentric weights → (anchors → morph) → barycentric guidance or prompt interpolation |
-| `src/pipelines/flux2.py` | Custom FLUX.2 dev/klein denoising loop and `Flux2Editor` wrapper |
-| `src/pipelines/qwen.py` | Custom Qwen-Image-Edit-2511 denoising loop and `QwenEditor` wrapper |
-| `src/face_morph.py` | Landmark detection and Delaunay-mesh 3-way face morphing |
-| `src/dataset.py` | AffectNet and image-folder datasets |
-| `src/utils.py` | VA mesh, barycentric interpolation, seeding |
-| `src/va_mesh.csv` | Default VA mesh: emotion anchors and their (valence, arousal) positions |
-| `notebooks/barycentric_guidance_klein.ipynb` | Colab demo: 5×5 VA grid for `notebooks/celeba_example.jpg` with FLUX.2 [klein] 4B |
+Barycentric guidance enables valence-arousal (VA) based image editing by mapping combinations of discrete emotion prompts to VA points. This repo focuses on the core experiment of the paper, facial expression editing with FLUX.2-dev, and includes both the baseline Barycentric Guidance method and latent-space face morphing to improve smoothness. Other supported editors include **FLUX.2-klein-4B**, **FLUX.2-klein-9B**, and **Qwen-Image-Edit-2511**.
 
 ## Installation
 
@@ -28,70 +12,57 @@ Supported editors: **FLUX.2 [dev]**, **FLUX.2 [klein] 9B / 4B** and **Qwen-Image
 pip install -r requirements.txt
 ```
 
-FLUX.2 [dev] is a gated model on Hugging Face: accept its license on the model page and run `hf auth login` before the first run. Weights are downloaded to `--cache_dir`.
+FLUX.2-dev is a gated model on Hugging Face, so accept its license on the model page and run `hf auth login` before the first run. For a lightweight version of our method, you can try running our code with FLUX.2-klein-4B, which does not require accepting a license. However, results with this model will be weaker than those reported in the paper. Weights should be downloaded to `--cache_dir`.
 
 ## Usage
 
-The default setup is FLUX.2 [dev] with barycentric guidance and face-morph refinement. This command generates a 10×10 VA grid (valence and arousal in [-1, 1]) for each of the first 100 neutral AffectNet validation images:
+The default setup is FLUX.2-dev with barycentric guidance and face morphing. This command generates a 10×10 VA grid (valence and arousal in [-1, 1]) for each of the first 100 images in a folder of CelebA-HQ faces. CelebA-HQ images can be downloaded from the [CelebA website](https://mmlab.ie.cuhk.edu.hk/projects/CelebA.html).
 
 ```bash
 python src/main.py \
     --model flux2-dev \
     --mode bary_guide --morph --scale_w_cfg \
     --smoothness2d --total_images 100 \
-    --guidance_scale 4.0 --morph_step 10 --anchor_steps 30 --inference_steps 30 \
-    --img_dir /path/to/affectnet/Manually_Annotated_Images \
-    --affectnet_csv /path/to/affectnet/validation.csv \
+    --img_dir /path/to/celeba_hq \
     --output_dir /path/to/outputs/flux2_dev_bary_guide \
     --cache_dir /path/to/hf_cache
 ```
 
-The guidance and step values shown are the defaults, so the command still works without them. Images are saved as `<output_dir>/smoothness2d/<image>_<valence>_<arousal>.jpg`. Re-running the same command skips images that already exist, so an interrupted job can be resumed.
+Images are saved as `<output_dir>/smoothness2d/<image>_<valence>_<arousal>.jpg`. Re-running the same command skips images that already exist, so an interrupted job can be resumed. Run `python src/main.py --help` for all options.
 
-### Experiments
-
-| Flag | Output | Images |
+| Argument | Default | Description |
 | --- | --- | --- |
-| `--smoothness2d` | `<output_dir>/smoothness2d/` | 10×10 VA grid per source image (neutral faces only on AffectNet) |
-| `--fid` | `<output_dir>/fid/` | One image per source at a random VA target in the unit disc, for FID |
+| `--model` | `flux2-dev` | Editor: `flux2-dev`, `flux2-klein` (9B), `flux2-klein-4b` or `qwen-2511` (Qwen-Image-Edit-2511) |
+| `--img_dir` | required | Folder of source face images (e.g. CelebA-HQ or FFHQ) |
+| `--affectnet_csv` | none | AffectNet annotation CSV; if given, `--img_dir` is read as AffectNet and filtered to neutral faces |
+| `--output_dir` | required | Where generated images are saved |
+| `--cache_dir` | required | Where model weights are downloaded |
+| `--mesh_csv` | `src/va_mesh.csv` | VA mesh of emotion anchors (columns `Emotion,Pleasure_Mean,Arousal_Mean`) |
+| `--smoothness2d` | off | Generate a 10×10 VA grid per source image, saved to `<output_dir>/smoothness2d/` |
+| `--fid` | off | Generate one image per source at a random VA target in the unit disc, saved to `<output_dir>/fid/` |
+| `--total_images` | `100` | Number of source images used by `--smoothness2d` / `--fid` |
+| `--mode` | `bary_guide` | `bary_guide`: barycentric guidance (ours); `prompt_interp`: prompt-embedding interpolation baseline |
+| `--morph` | off | Morph the three anchor emotion edits together and use the result to guide the first `--morph_step` denoising steps |
+| `--scale_w_cfg` | off | Scale the guidance scale from 1 at neutral (0, 0) up to `--guidance_scale` at radius 1 |
+| `--guidance_scale` | `4.0` | Guidance scale for the anchor and final edits |
+| `--morph_step` | `10` | Number of early denoising steps guided by the morphed image |
+| `--anchor_steps` | `30` | Denoising steps for the anchor emotion images |
+| `--inference_steps` | `30` | Denoising steps for the final images |
 
-`--total_images` sets how many source images are used. Both flags can be passed together.
+## Notebooks
 
-```bash
-# FID images with the same method
-python src/main.py --model flux2-dev --mode bary_guide --morph --scale_w_cfg --fid --total_images 1000 \
-    --img_dir /path/to/affectnet/Manually_Annotated_Images --affectnet_csv /path/to/affectnet/validation.csv \
-    --output_dir /path/to/outputs/flux2_dev_bary_guide --cache_dir /path/to/hf_cache
+We also include two short Jupyter notebooks:
+- `notebooks/barycentric_guidance_klein.ipynb` is a self-contained Colab demo that edits a CelebA-HQ image over a 5×5 VA grid using the lightweight FLUX.2-klein-4B model. 
+- `notebooks/clip_pca.ipynb` runs PCA on CLIP text embeddings of emotion words and shows that the resulting low-dimensional structure closely matches the valence-arousal model.
+
+## Citation
+
+```bibtex
+@inproceedings{mannering2026barycentric,
+  title     = {Barycentric Guidance: Turning Foundation Image Editors
+               into Continuous Affective Controllers},
+  author    = {Mannering, Harvey and Huang, Zhiwu and Pr{\"u}gel-Bennett, Adam},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2026}
+}
 ```
-
-### Methods
-
-| `--mode` | Method |
-| --- | --- |
-| `bary_guide` (default) | Barycentric guidance: weighted sum of the three emotion prompts' noise predictions |
-| `prompt_interp` | Prompt interpolation baseline: weighted average of the three prompt embeddings |
-
-`--morph` adds face-morph refinement to either mode: the three anchor emotion edits are morphed together and guide the first `--morph_step` denoising steps. Without `--morph`, `prompt_interp` uses the model's stock pipeline call. `--scale_w_cfg` scales the guidance scale with the distance of the VA target from neutral, from 1 at (0, 0) up to `--guidance_scale` at radius 1.
-
-```bash
-# Prompt interpolation baseline (no morph)
-python src/main.py --model flux2-dev --mode prompt_interp --smoothness2d \
-    --img_dir /path/to/affectnet/Manually_Annotated_Images --affectnet_csv /path/to/affectnet/validation.csv \
-    --output_dir /path/to/outputs/flux2_dev_prompt_interp --cache_dir /path/to/hf_cache
-```
-
-### Other models and datasets
-
-`--model` selects the editor: `flux2-dev` (default), `flux2-klein` (FLUX.2 [klein] base 9B), `flux2-klein-4b` (FLUX.2 [klein] base 4B, the smallest; ~17 GB) or `qwen-2511` (Qwen-Image-Edit-2511). Without `--affectnet_csv`, `--img_dir` is read as a plain folder of images, e.g. FFHQ or CelebA-HQ.
-
-```bash
-# Qwen-Image-Edit-2511 on a folder of face images
-python src/main.py --model qwen-2511 --mode bary_guide --morph --scale_w_cfg --smoothness2d \
-    --img_dir /path/to/celeba_hq --output_dir /path/to/outputs/qwen_bary_guide --cache_dir /path/to/hf_cache
-```
-
-### Custom VA mesh
-
-The emotion anchors are read from `src/va_mesh.csv` (columns `Emotion,Pleasure_Mean,Arousal_Mean`). Pass `--mesh_csv my_mesh.csv` to use a different set of emotions or positions. Each emotion word is placed into the prompt *"Change this persons facial expression to be {emotion} while maintaining the same facial features, composition, lighting, and camera angle"*.
-
-Run `python src/main.py --help` for all options.
